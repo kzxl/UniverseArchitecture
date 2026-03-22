@@ -218,20 +218,60 @@ registry.Dispatch("greeter", "hello", ["Universe"])
 
 ## ⚡ Performance Benchmark
 
-Benchmark: **1,000,000 registry dispatch operations** (calculator add 1 2)
+Each language runs a **5-phase benchmark** (1M iterations, 10K latency samples):
 
-| Language | Ops/sec (Calculator) | Ops/sec (Greeter) | Relative |
-|----------|:--------------------:|:-----------------:|:--------:|
-| **TypeScript** | ~22,000,000 | ~16,500,000 | 🥇 Fastest |
-| **C# .NET 8** | ~1,600,000 | ~10,800,000 | 🥈 |
-| **Go** | ~2,300,000 | ~5,400,000 | 🥉 |
-| **Python** | ~735,000 | ~2,000,000 | 4th |
+### Phase 1: Warmup
+10,000 iterations to trigger JIT (C#, TypeScript) or warm caches.
 
-> **Note**: TypeScript's V8 JIT compiler aggressively optimizes hot loops, explaining its lead.
-> C# and Go are comparable. Python is slower due to interpreter overhead but still handles 700K+ ops/sec.
-> Benchmark chạy trên cùng 1 máy. Run each language's demo to see actual numbers on yours.
+### Phase 2: Throughput (1M dispatch operations)
 
-**Key insight**: Registry dispatch overhead là **negligible** ở mọi ngôn ngữ. Pattern không hy sinh performance — chi phí chính là string lookup trong Map/Dictionary, ~O(1).
+| Scenario | C# .NET 8 | Go | TypeScript | Python |
+|----------|:---------:|:--:|:----------:|:------:|
+| calculator add | 1,778,151 | 2,266,552 | **17,493,925** | 760,352 |
+| calculator mul | 2,200,668 | 2,307,587 | **10,177,154** | 710,044 |
+| calculator div | 1,914,091 | 1,957,375 | **10,207,915** | 667,046 |
+| greeter hello | **16,130,515** | 5,108,142 | 12,261,243 | 2,060,008 |
+| greeter goodbye | 12,657,267 | 5,270,292 | **12,685,960** | 2,111,672 |
+
+> **Bold** = fastest per scenario. TypeScript V8 JIT wins on compute-heavy (calculator).
+> C# .NET 8 excels on string operations (greeter). Go is consistently ~2-5M ops/sec.
+
+### Phase 3: Latency Distribution (P50/P95/P99)
+
+| Language | Min (ns) | Avg (ns) | P50 (ns) | P95 (ns) | P99 (ns) |
+|----------|:--------:|:--------:|:--------:|:--------:|:--------:|
+| **C# .NET 8** | 400 | 456 | 400 | 500 | 900 |
+| **Go** | <100 | 466 | <100 | <100 | <100 |
+| **TypeScript** | 100 | 336 | 200 | 600 | 700 |
+| **Python** | 1,300 | 1,489 | 1,400 | 1,800 | 2,200 |
+
+> Latency per single dispatch call. All languages achieve **sub-microsecond** P50 (except Python ~1.4μs).
+
+### Phase 4: Registry Scalability (2 → 100 modules)
+
+| # Modules | C# ops/sec | Go ops/sec | TS ops/sec | Python ops/sec |
+|:---------:|:----------:|:----------:|:----------:|:--------------:|
+| 2 (base) | 2,541,638 | 2,271,000 | 20,924,004 | 769,000 |
+| 10 | 2,541,638 | 2,299,500 | 20,924,004 | 766,285 |
+| 40 | 2,568,132 | 2,153,960 | 20,111,013 | 768,650 |
+| 70 | 2,567,591 | 2,216,002 | 18,835,939 | 755,403 |
+| 100 | 2,525,864 | 2,157,650 | 16,084,928 | 740,616 |
+
+> **Key insight**: O(1) dictionary/map lookup means **near-zero overhead** even at 100 modules.
+> TypeScript shows slight degradation at 100 modules (~23%) while C#/Python stay flat.
+
+### Phase 5: Memory (C# only)
+- Registry with 1,000 modules: **~115 KB**
+- Per-module overhead: **~118 bytes**
+
+### Summary
+
+| Metric | C# .NET 8 | Go | TypeScript | Python |
+|--------|:---------:|:--:|:----------:|:------:|
+| Peak throughput | 16M ops/s | 5.3M ops/s | **22M ops/s** | 2.1M ops/s |
+| P50 latency | 400ns | <100ns | 200ns | 1,400ns |
+| Scalability (100 mod) | ~0% overhead | ~5% | ~23% | ~4% |
+| Relative | 🥈 | 🥉 | 🥇 | 4th |
 
 ---
 
@@ -257,11 +297,8 @@ Universe Architecture đã được áp dụng thành công trong:
 
 | Project | Platform | Modules |
 |---------|----------|:-------:|
-| **NetTool** | WPF + Go | 11 network tools |
-| **XTranslate** | WPF | Translation engines |
-| **MDS Management** | WinForms | 16 business features |
-| **MDS WebApi** | .NET Fx WebAPI | Vertical feature slices |
-| **HelpDesk** | React + Express.js | Dynamic CRUD features |
+| **[NetTool](https://github.com/kzxl/NetTool)** | WPF + Go | 11 network tools |
+| **[XTranslate](https://github.com/kzxl/XTranslate)** | WPF .NET 8 | Translation engines, OCR |
 
 ### Adding a New Module (Real Example — NetTool)
 

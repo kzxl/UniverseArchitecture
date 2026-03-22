@@ -1,0 +1,13 @@
+.vs/
+bin/
+obj/
+node_modules/
+dist/
+out/
+__pycache__/
+*.pyc
+*.exe
+*.dll
+*.pdb
+*.user
+.vscode/

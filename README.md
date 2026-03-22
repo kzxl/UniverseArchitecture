@@ -220,15 +220,16 @@ registry.Dispatch("greeter", "hello", ["Universe"])
 
 Benchmark: **1,000,000 registry dispatch operations** (calculator add 1 2)
 
-| Language | Ops/sec | Relative |
-|----------|---------|:--------:|
-| **Go** | ~5,000,000+ | 🥇 Fastest |
-| **C# .NET 8** | ~3,000,000+ | 🥈 |
-| **TypeScript** | ~2,000,000+ | 🥉 |
-| **Python** | ~300,000+ | 4th |
+| Language | Ops/sec (Calculator) | Ops/sec (Greeter) | Relative |
+|----------|:--------------------:|:-----------------:|:--------:|
+| **TypeScript** | ~22,000,000 | ~16,500,000 | 🥇 Fastest |
+| **C# .NET 8** | ~1,600,000 | ~10,800,000 | 🥈 |
+| **Go** | ~2,300,000 | ~5,400,000 | 🥉 |
+| **Python** | ~735,000 | ~2,000,000 | 4th |
 
-> **Note**: Benchmark chạy trên cùng 1 máy. Kết quả thực tế phụ thuộc vào hardware.
-> Run each language's demo to see actual numbers on your machine.
+> **Note**: TypeScript's V8 JIT compiler aggressively optimizes hot loops, explaining its lead.
+> C# and Go are comparable. Python is slower due to interpreter overhead but still handles 700K+ ops/sec.
+> Benchmark chạy trên cùng 1 máy. Run each language's demo to see actual numbers on yours.
 
 **Key insight**: Registry dispatch overhead là **negligible** ở mọi ngôn ngữ. Pattern không hy sinh performance — chi phí chính là string lookup trong Map/Dictionary, ~O(1).
 

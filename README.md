@@ -327,9 +327,18 @@ ToolRegistry.Register(new YourTool());
 
 ## 📚 Further Reading
 
-- [Universe Architecture — Full Documentation](docs/universe-architecture.md)
-- [Anti-Patterns & Solutions](docs/universe-architecture.md#anti-patterns)
-- [Migration Path: Monolith → Microservices](docs/universe-architecture.md#migration-path)
+Full documentation on the architecture principles, advanced patterns, and real-world mapping:
+
+| 🇬🇧 English | 🇻🇳 Tiếng Việt |
+|:---|:---|
+| [Full Documentation](universe-plugin.md) | [Tài liệu đầy đủ](universe-plugin.vi.md) |
+
+**Key sections:**
+- [Core Principles](universe-plugin.md#2-eight-core-principles) — 8 principles mapped to universe metaphor
+- [Platform Mapping](universe-plugin.md#3-platform-mapping) — WinForms, Web API, WPF, Go, React, PHP
+- [Anti-Patterns](universe-plugin.md#4-anti-patterns--solutions) — How to detect and fix "black holes"
+- [Fractal Universe](universe-plugin.md#95-fractal-universe--universe-within-universe) — Self-similar at every scale
+- [Swappable Data Layer](universe-plugin.md#96-swappable-data-layer--change-fuel-without-redesigning-the-ship) — Infrastructure independence
 
 ---
 

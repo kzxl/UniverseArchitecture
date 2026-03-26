@@ -6,6 +6,14 @@
 A modular, extensible software architecture pattern inspired by the universe's expansion model.
 Demonstrated across **4 languages** with identical behavior and benchmarks.
 
+### 📚 Enterprise Architecture Documentation (v3.0)
+To prove this architecture is production-ready, please consult our official engineering proofs:
+- **[ADR Records (Decisions) / Giải trình Thiết kế](docs/architecture/en/adr_records.md)** | [VIE](docs/architecture/vi/adr_records.md)
+- **[Security & Threat Model / Mô hình Bảo mật](docs/architecture/en/security_model.md)** | [VIE](docs/architecture/vi/security_model.md)
+- **[Benchmark Report / Báo cáo Hiệu năng](docs/architecture/en/benchmark_report.md)** | [VIE](docs/architecture/vi/benchmark_report.md)
+- **[Scaling & Topology / Chuyển đổi Microservices](docs/architecture/en/deployment_topology.md)** | [VIE](docs/architecture/vi/deployment_topology.md)
+- **🔥 [v4.0 Future Proposals / Đề xuất tương lai](docs/architecture/en/future_proposals.md)** | [VIE](docs/architecture/vi/future_proposals.md)
+
 ---
 
 ## 📖 What is Universe Architecture?

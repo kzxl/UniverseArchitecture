@@ -18,10 +18,13 @@ public sealed class ModuleContext
     /// <summary>Kết quả sau khi execute.</summary>
     public string? Result { get; set; }
 
-    /// <summary>Metadata key-value (middleware có thể gắn thêm data).</summary>
-    public Dictionary<string, object> Items { get; } = [];
+    /// <summary> Metadata key-value (middleware có thể gắn thêm data). </summary>
+    public Dictionary<string, object> Items { get; } = new();
 
-    /// <summary>Timestamp khi context được tạo.</summary>
+    /// <summary> Các quyền/claims hiện tại của caller (Sandboxing). </summary>
+    public HashSet<string> Claims { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary> Timestamp khi context được tạo. </summary>
     public DateTimeOffset Timestamp { get; } = DateTimeOffset.UtcNow;
 }
 

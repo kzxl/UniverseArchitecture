@@ -17,21 +17,26 @@ var registry = new ModuleRegistry();
 var loggingMw = new LoggingMiddleware();
 var timingMw = new TimingMiddleware();
 var errorMw = new ErrorHandlingMiddleware();
+var authMw = new AccessControlMiddleware(registry); // New: Sandboxing
 
 registry.AddMiddleware(errorMw);      // Outermost — catches all errors
 registry.AddMiddleware(timingMw);      // Measures time
 registry.AddMiddleware(loggingMw);     // Innermost — logs before execute
+registry.AddMiddleware(authMw);        // Security check
 
 // ── Register modules ──
 registry.Register(new CalculatorModule());
 registry.Register(new GreeterModule());
+
+// Phase 4: Đăng ký Nested Module (Fractal Universe)
+registry.Register(new UniverseDemo.Modules.Organization.DepartmentModule());
 
 // Register NotifierModule with lifecycle (async)
 var notifier = new NotifierModule(registry.EventBus);
 await registry.RegisterAsync(notifier);
 
 // ══════════════════ Info ══════════════════
-ConsoleHelper.PrintHeader("Universe Architecture — C# .NET 8");
+ConsoleHelper.PrintHeader("Universe Architecture — v3.0 (Phase 4)");
 
 Console.WriteLine($"\n  📦 Registered modules: {registry.Count}");
 Console.WriteLine($"  🔗 Middleware pipeline: {registry.MiddlewareCount} handlers");
@@ -40,8 +45,38 @@ Console.WriteLine($"  📡 EventBus: {registry.EventBus.TypeCount} event types, 
 foreach (var (name, module) in registry.GetAll())
     Console.WriteLine($"     • {name} — {module.Description} [{string.Join(", ", module.Commands)}]");
 
+// ══════════════════ Phase 4 Demos ══════════════════
+ConsoleHelper.PrintHeader("Phase 4 Demos: Async, Nested, Permissions");
+
+Console.WriteLine("\n  ▶ [Async] Gửi lệnh ping_async (Task.Delay 500ms)...");
+var asyncResult = await registry.DispatchAsync("hr.john", "ping_async", []);
+Console.WriteLine($"  ✅ Ket qua: {asyncResult}");
+
+Console.WriteLine("\n  ▶ [Nested] Danh sách nhân sự từ HR...");
+var listResult = registry.Dispatch("hr", "list", []);
+Console.WriteLine($"  ✅ HR list: {listResult}");
+
+Console.WriteLine("\n  ▶ [Nested] Dispatch xuyên HR đến nhân sự 'jane'...");
+var pingJane = await registry.DispatchAsync("hr.jane", "ping_async", []);
+Console.WriteLine($"  ✅ HR.Jane: {pingJane}");
+
+Console.WriteLine("\n  ▶ [Sandboxing] Caller MỚI thử lấy lương của John (KHÔNG chứa claim 'admin')...");
+try
+{
+    var salaryDenied = registry.Dispatch("hr.john", "salary", []);
+    Console.WriteLine($"  ❌ Bi chan: {salaryDenied}");
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"  ❌ Ex: {ex.Message}");
+}
+
+Console.WriteLine("\n  ▶ [Sandboxing] Caller thử CẤP QUYỀN 'admin' TRONG TEST (Mô phỏng bypass/context)...");
+// Note: Dispatch/DispatchAsync đều tạo mới context.
+// Giả lập AccessControlMiddleware cho phép truyền user claims qua scope => cần design thêm. Mặc định AccessDenied là đúng!
+
 // ══════════════════ Demo Commands ══════════════════
-ConsoleHelper.PrintHeader("Demo Commands (via Middleware Pipeline)");
+ConsoleHelper.PrintHeader("Demo Base Commands (via Middleware Pipeline)");
 
 var demos = new (string module, string cmd, string[] parameters)[]
 {

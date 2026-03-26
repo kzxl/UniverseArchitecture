@@ -44,33 +44,28 @@ public sealed class ModuleRegistry
     /// <summary>Dispatch command tới module, qua middleware pipeline.</summary>
     public string Dispatch(string moduleName, string command, string[] args)
     {
-        if (!_modules.TryGetValue(moduleName, out var module))
-            throw new KeyNotFoundException($"Module '{moduleName}' not found. Available: {string.Join(", ", _modules.Keys)}");
-
-        if (_middlewares.Count == 0)
-            return module.Execute(command, args);
-
-        // Build context + run pipeline
-        var context = new ModuleContext
-        {
-            ModuleName = moduleName,
-            Command = command,
-            Args = args
-        };
-
-        RunPipeline(context, module).GetAwaiter().GetResult();
-        return context.Result ?? module.Execute(command, args);
+        return DispatchAsync(moduleName, command, args).GetAwaiter().GetResult();
     }
 
-    /// <summary>Dispatch async qua middleware pipeline.</summary>
+    /// <summary>Dispatch async qua middleware pipeline. Hỗ trợ Nested Registry và Async Execution.</summary>
     public async Task<string> DispatchAsync(string moduleName, string command, string[] args)
     {
-        if (!_modules.TryGetValue(moduleName, out var module))
-            throw new KeyNotFoundException($"Module '{moduleName}' not found. Available: {string.Join(", ", _modules.Keys)}");
+        // 1. Phân tích nested routing (Fractal Universe)
+        var parts = moduleName.Split('.', 2);
+        var rootModule = parts[0];
+        
+        if (!_modules.TryGetValue(rootModule, out var module))
+            throw new KeyNotFoundException($"Module '{rootModule}' not found. Available: {string.Join(", ", _modules.Keys)}");
 
-        if (_middlewares.Count == 0)
-            return module.Execute(command, args);
+        // 1b. Gửi tiếp xuống SubRegistry nếu có nested route
+        if (parts.Length > 1)
+        {
+            if (module is INestedModule nested)
+                return await nested.SubRegistry.DispatchAsync(parts[1], command, args);
+            throw new InvalidOperationException($"Module '{rootModule}' does not support nested routing (Not an INestedModule).");
+        }
 
+        // 2. Build context
         var context = new ModuleContext
         {
             ModuleName = moduleName,
@@ -78,8 +73,9 @@ public sealed class ModuleRegistry
             Args = args
         };
 
+        // 3. Chạy pipeline (Lực hấp dẫn) -> Execution
         await RunPipeline(context, module);
-        return context.Result ?? module.Execute(command, args);
+        return context.Result ?? await ExecuteModuleCore(module, command, args);
     }
 
     /// <summary>Shutdown tất cả modules có lifecycle.</summary>
@@ -105,12 +101,23 @@ public sealed class ModuleRegistry
             if (index < _middlewares.Count)
                 return _middlewares[index].InvokeAsync(context, Next);
 
-            // End of pipeline → execute module
-            context.Result = module.Execute(context.Command, context.Args);
+            // End of pipeline → Không execute CŨ ở đây nữa, đẩy về DispatchAsync chờ Result
             return Task.CompletedTask;
         }
 
         return Next();
+    }
+
+    private async Task<string> ExecuteModuleCore(IModule module, string command, string[] args)
+    {
+        // Ưu tiên Async Execution nếu module hỗ trợ
+        if (module is IAsyncModule asyncModule)
+        {
+            return await asyncModule.ExecuteAsync(command, args);
+        }
+        
+        // Fallback về sync execution
+        return module.Execute(command, args);
     }
 
     /// <summary>Lấy danh sách tất cả modules đã đăng ký.</summary>

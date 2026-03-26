@@ -1,14 +1,18 @@
 import type { IModule } from './IModule';
+import type { IMiddleware, ModuleContext } from './Middleware';
+import { EventBus } from './EventBus';
+import { hasLifecycle } from './Lifecycle';
 
 /**
  * Registry — Trung tâm đăng ký module.
- * Module tự đăng ký, Core không biết chi tiết module.
- * Map-based lookup, case-insensitive.
+ * Upgraded: EventBus, Middleware pipeline, Lifecycle hooks.
  */
 export class ModuleRegistry {
   private readonly modules = new Map<string, IModule>();
+  private readonly middlewares: IMiddleware[] = [];
+  readonly eventBus = new EventBus();
 
-  /** Đăng ký 1 module. Trùng tên → throw. */
+  /** Đăng ký 1 module. */
   register(module: IModule): void {
     const key = module.name.toLowerCase();
     if (this.modules.has(key)) {
@@ -17,23 +21,61 @@ export class ModuleRegistry {
     this.modules.set(key, module);
   }
 
-  /** Dispatch command tới module phù hợp. */
+  /** Đăng ký module với lifecycle hooks. */
+  async registerAsync(module: IModule): Promise<void> {
+    if (hasLifecycle(module)) await module.onInitializing();
+    this.register(module);
+    if (hasLifecycle(module)) await module.onInitialized();
+  }
+
+  /** Thêm middleware vào pipeline. FIFO. */
+  addMiddleware(mw: IMiddleware): void {
+    this.middlewares.push(mw);
+  }
+
+  /** Dispatch command qua middleware pipeline. */
   dispatch(moduleName: string, command: string, args: string[]): string {
     const module = this.modules.get(moduleName.toLowerCase());
     if (!module) {
       const available = [...this.modules.keys()].join(', ');
       throw new Error(`Module '${moduleName}' not found. Available: ${available}`);
     }
-    return module.execute(command, args);
+
+    if (this.middlewares.length === 0) {
+      return module.execute(command, args);
+    }
+
+    const context: ModuleContext = {
+      moduleName, command, args,
+      items: {},
+      timestamp: Date.now(),
+    };
+
+    let index = -1;
+    const next = (): void => {
+      index++;
+      if (index < this.middlewares.length) {
+        this.middlewares[index].invoke(context, next);
+      } else {
+        context.result = module.execute(command, args);
+      }
+    };
+    next();
+
+    return context.result ?? module.execute(command, args);
   }
 
-  /** Lấy tất cả modules. */
-  getAll(): ReadonlyMap<string, IModule> {
-    return this.modules;
+  /** Shutdown all modules with lifecycle. */
+  async shutdown(): Promise<void> {
+    for (const module of this.modules.values()) {
+      if (hasLifecycle(module)) {
+        await module.onShuttingDown();
+        await module.onShutdown();
+      }
+    }
   }
 
-  /** Số lượng modules. */
-  get count(): number {
-    return this.modules.size;
-  }
+  getAll(): ReadonlyMap<string, IModule> { return this.modules; }
+  get count(): number { return this.modules.size; }
+  get middlewareCount(): number { return this.middlewares.length; }
 }

@@ -48,10 +48,10 @@ Plugin truyền thống dễ bị version mismatch, conflict shared resource. **
 | 1 | **Core Stable — Modules Volatile** | Core interfaces ít thay đổi. Modules thoải mái thêm/sửa/xóa |
 | 2 | **Module Independence** | `Module → Core ✅` · `Module → Module ❌` |
 | 3 | **Contract-First** | Mọi module tuân thủ cùng 1 interface (metadata + lifecycle) |
-| 4 | **Registry — Not Hard-coded** | Module tự đăng ký. Core không biết chi tiết module |
-| 5 | **Indirect Communication** | Module giao tiếp qua Event Bus / Mediator, không import trực tiếp |
-| 6 | **Data Sovereignty** | Mỗi module sở hữu data riêng, không xâm phạm module khác |
-| 7 | **Middleware = Gravity** | Cross-cutting concerns (Auth, Log) tác động mọi module tự động |
+| 4 | **Registry — Not Hard-coded** | Module tự đăng ký, tích hợp ServiceContainer (DI). |
+| 5 | **Indirect Communication** | **Event Bus / Mediator** — Module giao tiếp qua pub/sub, không import |
+| 6 | **Data Sovereignty** | Mỗi module sở hữu data riêng, không xâm phạm không gian module khác |
+| 7 | **Middleware & Lifecycle** | **Gravity**: Auth, Log tác động mọi module. **Star Lifecycle**: Init/Shutdown an toàn |
 | 8 | **Migration Path** | Module đủ lớn → tách thành service riêng, zero refactor |
 
 ---

@@ -45,6 +45,8 @@ Plugin truyền thống dễ bị version mismatch, conflict shared resource.
 ### #1: Core Stable — Modules Volatile
 Core (interfaces, base classes, shared services) ít thay đổi. Modules thoải mái thêm/sửa/xoá.
 
+> *Trong phiên bản 3.0, `IServiceContainer` đóng vai trò như Trạm Không Gian (Space Station) — một Dependency Injection container nhẹ nhàng dùng để phân giải dependency chuyên biệt cho module mà không bị gắn chặt vào thư viện DI bên thứ 3 (như Autofac hay MS.DI).*
+
 ### #2: Module Independence
 ```
 ✅ Module → Core/Shared  (OK)
@@ -57,8 +59,21 @@ Mọi module tuân thủ cùng 1 interface (metadata + lifecycle + UI factory).
 ### #4: Registry — Đăng ký, không Hard-code
 Module tự đăng ký. Core không biết chi tiết module.
 
-### #5: Giao tiếp gián tiếp
+### #5: Giao tiếp gián tiếp (EventBus)
 Module cần "nói chuyện" → qua **Event Bus / Mediator**, không import trực tiếp.
+> *Trong 3.0, Sóng hấp dẫn (Gravitational Waves) được cung cấp qua `IEventBus`.*
+
+```csharp
+// Module A: Publish event (không biết ai nghe)
+registry.EventBus.Publish(new UserLoggedInEvent { UserId = 123 });
+
+// Module B: Subscribe (không cần reference Module A)
+public void OnInitialized() {
+    registry.EventBus.Subscribe<UserLoggedInEvent>(this, @event => {
+        RefreshDashboard(@event.UserId);
+    });
+}
+```
 
 ### #6: Data Sovereignty — Module Sở Hữu Data Riêng
 > *Mỗi thiên hà có hệ thống sao riêng — không xâm phạm không gian thiên hà khác.*
@@ -78,34 +93,40 @@ Module A **không truy cập trực tiếp** bảng/entity của Module B. Cần
 | WinForms | Controller chỉ inject Service của feature mình, dữ liệu khác qua Shared Service |
 | Microservices | Mỗi service có DB schema/database riêng |
 
-### #7: Middleware = Lực Hấp Dẫn
-> *Lực hấp dẫn tác động lên MỌI vật thể trong vũ trụ mà không cần vật thể biết về nó.*
+### #7: Middleware = Lực Hấp Dẫn & Module Lifecycle (Vòng Đời Ngôi Sao)
+> *Lực hấp dẫn tác động lên MỌI vật thể trong vũ trụ mà không cần vật thể biết về nó. Các ngôi sao cũng có vòng đời sinh ra và chết đi.*
 
-Cross-cutting concerns (Auth, Logging, Compression, Error Handling) được xử lý ở **Middleware layer** — tự động tác động lên mọi request/action mà module không cần biết.
+#### A. Middleware Pipeline (Lực Hấp Dẫn)
+Cross-cutting concerns (Auth, Logging, Compression, Error Handling) được xử lý ở **Middleware layer** — tự động tác động lên mọi request/action mà module không bị bẩn code.
 
-```
-┌─────────────────────────────────────────┐
-│           Middleware Pipeline            │
-│  ┌─────┐ ┌──────┐ ┌──────┐ ┌─────────┐ │
-│  │ JWT │→│ GZip │→│ Log  │→│ ErrHndl │ │
-│  └─────┘ └──────┘ └──────┘ └─────────┘ │
-│                    ↓                    │
-│            Module Endpoint              │
-└─────────────────────────────────────────┘
+```csharp
+public interface IMiddleware {
+    Task Invoke(ModuleContext context, Func<Task> next);
+}
+
+// Setup Pipeline in Core:
+registry.AddMiddleware(new AuthenticationMiddleware());
+registry.AddMiddleware(new LoggingMiddleware());
+registry.AddMiddleware(new ErrorHandlingMiddleware());
+// Tự động áp dụng cho mọi lệnh Dispatch().
 ```
 
 **Key rules:**
-- Module **KHÔNG chứa** auth check, logging boilerplate, compression logic
-- Middleware **KHÔNG chứa** business logic
-- Thêm middleware mới = thêm 1 handler vào pipeline, không sửa module nào
+- Module **KHÔNG chứa** auth check, logging boilerplate, compression logic.
+- Middleware **KHÔNG chứa** business logic.
+- Thêm middleware mới = thêm 1 dòng code config, không sửa module nào.
 
-| Nền tảng | Middleware Implementation |
-|----------|-------------------------|
-| Web API (.NET Fx) | `DelegatingHandler` pipeline |
-| ASP.NET Core | `app.Use*()` middleware pipeline |
-| WinForms | `BaseForm` hooks (OnLoad, OnClosing) |
-| Express.js | `app.use()` middleware |
-| Go | `http.Handler` wrapper chain |
+#### B. Module Lifecycle (Vòng Đời Ngôi Sao)
+Module luôn cần quản lý tài nguyên (DB connections, background threads, socket listeners). `IModuleLifecycle` giúp module khởi tạo và dọn dẹp an toàn.
+
+```csharp
+public interface IModuleLifecycle {
+    Task OnInitializing();      // Trước khi đăng ký
+    Task OnInitialized();       // Sau khi đăng ký
+    Task OnShuttingDown();      // Trước khi xoá/tắt
+    Task OnShutdown();          // Sau khi tắt
+}
+```
 
 ### #8: Migration Path — Từ Thiên Hà Đến Vũ Trụ Con
 > *Khi thiên hà quá lớn, nó có thể tách ra thành vũ trụ con độc lập.*
@@ -503,17 +524,19 @@ app/
 
 ## 6. Conversion Table Đầy Đủ
 
-| Vũ trụ | PoE | WinForms | Web API | WPF | Go | React |
-|--------|-----|----------|---------|-----|-----|-------|
-| Quy luật VL | Damage System | IController | BaseApiController | ITool | Command interface | IPlugin |
-| Không gian | Socket System | BaseForm/Autofac | Infrastructure/ | Core/ | shared/ | Redux/Axios |
-| Thiên hà | Gem Category | Feature group | Module group | Module group | cmd/ | features/ |
-| Ngôi sao | Individual Gem | Feature folder | Feature slice | Module folder | cmd/x.go | feature/x/ |
-| Nền VM mới | League Mechanic | Thêm feature | Thêm vertical slice | Thêm module | Thêm command | Thêm plugin |
-| Big Bang | v1.0 | Init Autofac | Init Infrastructure | Init Core | Init main.go | Init store |
-| Lực hấp dẫn | Support Gems | BaseForm hooks | DelegatingHandler | App.Use* | http.Handler | app.use() |
-| Hệ sao riêng | Item data | Feature DB tables | Feature entities | Module models | pkg data | slice state |
-| Vũ trụ con | Separate realm | Tách project | Microservice | Separate app | Separate binary | Micro-frontend |
+| Vũ trụ | Lớp Phần Mềm | WinForms / C# | Go | TypeScript | Python |
+|--------|--------------|---------------|----|------------|--------|
+| **Quy luật VL** | Core Interfaces | `IModule` | `Module` | `IModule` | `IModule` |
+| **Không gian** | Shared Infra | `Program.cs` / `SharedLib` | `main.go` / `shared/` | `index.ts` | `main.py` |
+| **Thiên hà** | Module Group | Feature folder | `modules/` | `src/modules/` | `modules/` |
+| **Ngôi sao** | Module Unit | `NotifierModule` | `notifier` pkg | `NotifierModule` class | `NotifierModule` cls |
+| **Registry** | Auto-discover | `ModuleRegistry` | `core.Registry` | `ModuleRegistry` | `ModuleRegistry` |
+| **Lực hấp dẫn**| Middleware | `IMiddleware` | `Middleware` | `IMiddleware` | `IMiddleware` |
+| **Vòng đời** | Lifecycle Hooks | `IModuleLifecycle` | `ModuleLifecycle`| `IModuleLifecycle` | `IModuleLifecycle` |
+| **Sóng hấp dẫn**| Event Bus | `IEventBus` | `EventBus` | `EventBus` | `EventBus` |
+| **Trạm K.Gian** | Service Container| `IServiceContainer` | N/A (Manual DI) | N/A (Manual DI) | N/A (Manual DI) |
+| **Hệ sao riêng**| Data Sovereignty | Feature DB tables | pkg DB access | slice state | module schema |
+| **Vũ trụ con** | Microservice | Tách project | Separate app | Micro-frontend | Separate app |
 
 ---
 

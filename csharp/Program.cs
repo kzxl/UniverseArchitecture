@@ -1,29 +1,47 @@
 using System.Diagnostics;
 using UniverseDemo.Core;
+using UniverseDemo.Core.Middleware;
 using UniverseDemo.Modules.Calculator;
 using UniverseDemo.Modules.Greeter;
+using UniverseDemo.Modules.Notifier;
 using UniverseDemo.Shared;
 
 // ═══════════════════════════════════════════════════════════
 //  🌌 Universe Architecture — C# .NET 8 Demo
-//  Module tự đăng ký → Registry dispatch → kết quả
+//  Full demo: Registry + EventBus + Middleware + Lifecycle
 // ═══════════════════════════════════════════════════════════
 
 var registry = new ModuleRegistry();
 
-// ── Register modules (thêm module mới = thêm 1 dòng) ──
+// ── Middleware pipeline (Gravity — auto-apply to all dispatches) ──
+var loggingMw = new LoggingMiddleware();
+var timingMw = new TimingMiddleware();
+var errorMw = new ErrorHandlingMiddleware();
+
+registry.AddMiddleware(errorMw);      // Outermost — catches all errors
+registry.AddMiddleware(timingMw);      // Measures time
+registry.AddMiddleware(loggingMw);     // Innermost — logs before execute
+
+// ── Register modules ──
 registry.Register(new CalculatorModule());
 registry.Register(new GreeterModule());
+
+// Register NotifierModule with lifecycle (async)
+var notifier = new NotifierModule(registry.EventBus);
+await registry.RegisterAsync(notifier);
 
 // ══════════════════ Info ══════════════════
 ConsoleHelper.PrintHeader("Universe Architecture — C# .NET 8");
 
 Console.WriteLine($"\n  📦 Registered modules: {registry.Count}");
+Console.WriteLine($"  🔗 Middleware pipeline: {registry.MiddlewareCount} handlers");
+Console.WriteLine($"  📡 EventBus: {registry.EventBus.TypeCount} event types, {registry.EventBus.HandlerCount} handlers");
+
 foreach (var (name, module) in registry.GetAll())
     Console.WriteLine($"     • {name} — {module.Description} [{string.Join(", ", module.Commands)}]");
 
-// ── Demo commands ──
-ConsoleHelper.PrintHeader("Demo Commands");
+// ══════════════════ Demo Commands ══════════════════
+ConsoleHelper.PrintHeader("Demo Commands (via Middleware Pipeline)");
 
 var demos = new (string module, string cmd, string[] parameters)[]
 {
@@ -39,7 +57,54 @@ foreach (var (module, cmd, parameters) in demos)
 {
     var result = registry.Dispatch(module, cmd, parameters);
     ConsoleHelper.PrintResult(module, cmd, parameters, result);
+
+    // Publish events to demonstrate EventBus
+    if (module == "calculator")
+        registry.EventBus.Publish(new CalculationPerformedEvent
+        {
+            Operation = $"{cmd} {string.Join(" ", parameters)}",
+            Result = result
+        });
+    else if (module == "greeter")
+        registry.EventBus.Publish(new GreetingEvent
+        {
+            Name = parameters.FirstOrDefault() ?? "World",
+            Message = result
+        });
 }
+
+// ══════════════════ EventBus Demo ══════════════════
+ConsoleHelper.PrintHeader("EventBus — Indirect Communication");
+
+Console.WriteLine("\n  📡 Notifier received events from other modules (without direct import):");
+var history = registry.Dispatch("notifier", "history", []);
+Console.WriteLine(history);
+Console.WriteLine($"\n  {registry.Dispatch("notifier", "count", [])}");
+
+// ══════════════════ Middleware Logs ══════════════════
+ConsoleHelper.PrintHeader("Middleware Pipeline — Gravity Logs");
+
+Console.WriteLine($"\n  📝 Logging middleware captured {loggingMw.Logs.Count} dispatch(es):");
+foreach (var log in loggingMw.Logs.Take(5))
+    Console.WriteLine($"     {log}");
+if (loggingMw.Logs.Count > 5)
+    Console.WriteLine($"     ... and {loggingMw.Logs.Count - 5} more");
+
+// ══════════════════ ServiceContainer Demo ══════════════════
+ConsoleHelper.PrintHeader("ServiceContainer — DI for Modules");
+
+registry.Services.RegisterInstance<IEventBus>(registry.EventBus);
+var resolvedBus = registry.Services.Resolve<IEventBus>();
+Console.WriteLine($"\n  📦 Registered IEventBus in ServiceContainer");
+Console.WriteLine($"  ✅ Resolved same instance: {ReferenceEquals(resolvedBus, registry.EventBus)}");
+Console.WriteLine($"  📊 Services count: {registry.Services.Count}");
+
+// ══════════════════ Lifecycle Demo ══════════════════
+ConsoleHelper.PrintHeader("Module Lifecycle — Star Lifecycle");
+
+Console.WriteLine("\n  🌟 Shutting down all modules with lifecycle hooks...");
+await registry.ShutdownAsync();
+Console.WriteLine("  ✅ All lifecycle modules shut down gracefully.");
 
 // ══════════════════════════════════════════════════════════
 //  ⚡ DETAILED BENCHMARK
@@ -52,10 +117,16 @@ const int latencySamples = 10_000;
 
 // ── Phase 1: Warmup (JIT compilation) ──
 Console.WriteLine("\n  🔥 Phase 1: Warmup (JIT)...");
+
+// Fresh registry without middleware for benchmark (fair comparison)
+var benchRegistry = new ModuleRegistry();
+benchRegistry.Register(new CalculatorModule());
+benchRegistry.Register(new GreeterModule());
+
 for (int i = 0; i < warmupIterations; i++)
 {
-    registry.Dispatch("calculator", "add", ["1", "2"]);
-    registry.Dispatch("greeter", "hello", ["World"]);
+    benchRegistry.Dispatch("calculator", "add", ["1", "2"]);
+    benchRegistry.Dispatch("greeter", "hello", ["World"]);
 }
 Console.WriteLine($"     {warmupIterations:N0} warmup iterations completed");
 
@@ -65,25 +136,45 @@ Console.WriteLine("  ┌──────────────────�
 Console.WriteLine("  │ Scenario                       │ Time (ms)  │ Ops/sec      │");
 Console.WriteLine("  ├────────────────────────────────┼────────────┼──────────────┤");
 
-RunThroughput("calculator add 1 2", () => registry.Dispatch("calculator", "add", ["1", "2"]), benchIterations);
-RunThroughput("calculator mul 7 8", () => registry.Dispatch("calculator", "mul", ["7", "8"]), benchIterations);
-RunThroughput("calculator div 22 7", () => registry.Dispatch("calculator", "div", ["22", "7"]), benchIterations);
-RunThroughput("greeter hello World", () => registry.Dispatch("greeter", "hello", ["World"]), benchIterations);
-RunThroughput("greeter goodbye Dev", () => registry.Dispatch("greeter", "goodbye", ["Dev"]), benchIterations);
+RunThroughput("calculator add 1 2", () => benchRegistry.Dispatch("calculator", "add", ["1", "2"]), benchIterations);
+RunThroughput("calculator mul 7 8", () => benchRegistry.Dispatch("calculator", "mul", ["7", "8"]), benchIterations);
+RunThroughput("calculator div 22 7", () => benchRegistry.Dispatch("calculator", "div", ["22", "7"]), benchIterations);
+RunThroughput("greeter hello World", () => benchRegistry.Dispatch("greeter", "hello", ["World"]), benchIterations);
+RunThroughput("greeter goodbye Dev", () => benchRegistry.Dispatch("greeter", "goodbye", ["Dev"]), benchIterations);
 
 // Registry overhead: lookup miss
 RunThroughput("registry miss (error)", () =>
 {
-    try { registry.Dispatch("nonexistent", "x", []); } catch { }
+    try { benchRegistry.Dispatch("nonexistent", "x", []); } catch { }
 }, benchIterations);
+
+Console.WriteLine("  └────────────────────────────────┴────────────┴──────────────┘");
+
+// ── Phase 2b: Throughput with Middleware ──
+Console.WriteLine("\n  📊 Phase 2b: Throughput WITH Middleware Pipeline");
+
+var mwRegistry = new ModuleRegistry();
+mwRegistry.Register(new CalculatorModule());
+mwRegistry.AddMiddleware(new ErrorHandlingMiddleware());
+mwRegistry.AddMiddleware(new TimingMiddleware());
+
+// Warmup
+for (int i = 0; i < warmupIterations; i++)
+    mwRegistry.Dispatch("calculator", "add", ["1", "2"]);
+
+Console.WriteLine("  ┌────────────────────────────────┬────────────┬──────────────┐");
+Console.WriteLine("  │ Scenario                       │ Time (ms)  │ Ops/sec      │");
+Console.WriteLine("  ├────────────────────────────────┼────────────┼──────────────┤");
+
+RunThroughput("with middleware (2 mw)", () => mwRegistry.Dispatch("calculator", "add", ["1", "2"]), benchIterations);
 
 Console.WriteLine("  └────────────────────────────────┴────────────┴──────────────┘");
 
 // ── Phase 3: Latency Distribution ──
 Console.WriteLine($"\n  📈 Phase 3: Latency Distribution ({latencySamples:N0} samples)");
 
-var calcLatencies = MeasureLatencies(() => registry.Dispatch("calculator", "add", ["1", "2"]), latencySamples);
-var greetLatencies = MeasureLatencies(() => registry.Dispatch("greeter", "hello", ["World"]), latencySamples);
+var calcLatencies = MeasureLatencies(() => benchRegistry.Dispatch("calculator", "add", ["1", "2"]), latencySamples);
+var greetLatencies = MeasureLatencies(() => benchRegistry.Dispatch("greeter", "hello", ["World"]), latencySamples);
 
 Console.WriteLine("  ┌────────────────────┬──────────┬──────────┬──────────┬──────────┬──────────┐");
 Console.WriteLine("  │ Scenario           │ Min (ns) │ Avg (ns) │ P50 (ns) │ P95 (ns) │ P99 (ns) │");
@@ -98,7 +189,7 @@ Console.WriteLine("  ┌──────────────┬───�
 Console.WriteLine("  │ # Modules    │ Dispatch/sec │ Overhead     │");
 Console.WriteLine("  ├──────────────┼──────────────┼──────────────┤");
 
-var baselineOps = BenchmarkOps(registry, benchIterations / 10);
+var baselineOps = BenchmarkOps(benchRegistry, benchIterations / 10);
 
 for (int n = 10; n <= 100; n += 30)
 {
@@ -124,6 +215,31 @@ var after = GC.GetTotalMemory(true);
 Console.WriteLine($"     Registry with 1,000 modules: ~{(after - before) / 1024.0:F1} KB");
 Console.WriteLine($"     Per-module overhead: ~{(after - before) / 1000.0:F0} bytes");
 
+// ── Phase 6: EventBus Throughput ──
+Console.WriteLine("\n  📡 Phase 6: EventBus Throughput");
+var benchBus = new EventBus();
+var eventCount = 0;
+benchBus.Subscribe<CalculationPerformedEvent>(_ => eventCount++);
+
+for (int i = 0; i < warmupIterations; i++)
+    benchBus.Publish(new CalculationPerformedEvent { Operation = "test", Result = "1" });
+
+Console.WriteLine("  ┌────────────────────────────────┬────────────┬──────────────┐");
+Console.WriteLine("  │ Scenario                       │ Time (ms)  │ Ops/sec      │");
+Console.WriteLine("  ├────────────────────────────────┼────────────┼──────────────┤");
+
+RunThroughput("eventbus publish (1 sub)", () =>
+    benchBus.Publish(new CalculationPerformedEvent { Operation = "bench", Result = "1" }), benchIterations);
+
+// Add more subscribers
+for (int i = 0; i < 9; i++)
+    benchBus.Subscribe<CalculationPerformedEvent>(_ => eventCount++);
+
+RunThroughput("eventbus publish (10 sub)", () =>
+    benchBus.Publish(new CalculationPerformedEvent { Operation = "bench", Result = "1" }), benchIterations);
+
+Console.WriteLine("  └────────────────────────────────┴────────────┴──────────────┘");
+
 Console.WriteLine();
 Console.WriteLine("  ✅ All benchmarks completed!");
 Console.WriteLine();
@@ -147,7 +263,7 @@ static double[] MeasureLatencies(Action action, int samples)
         var start = Stopwatch.GetTimestamp();
         action();
         var end = Stopwatch.GetTimestamp();
-        latencies[i] = (end - start) * 1_000_000_000.0 / Stopwatch.Frequency; // nanoseconds
+        latencies[i] = (end - start) * 1_000_000_000.0 / Stopwatch.Frequency;
     }
     Array.Sort(latencies);
     return latencies;

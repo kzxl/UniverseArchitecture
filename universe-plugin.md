@@ -47,6 +47,8 @@ Traditional plugins suffer from version mismatch and shared resource conflicts.
 ### #1: Core Stable — Modules Volatile
 Core (interfaces, base classes, shared services) rarely changes. Modules are free to add/edit/delete.
 
+> *In 3.0, the `IServiceContainer` acts as the Space Station — a lightweight Dependency Injection container that resolves module dependencies without tying them to a specific 3rd party framework (like Autofac or MS.DI).*
+
 ### #2: Module Independence
 ```
 ✅ Module → Core/Shared  (OK)
@@ -59,8 +61,21 @@ Every module obeys the same interface (metadata + lifecycle + UI factory).
 ### #4: Registry — Not Hard-coded
 Modules self-register. Core doesn't know module details.
 
-### #5: Indirect Communication
+### #5: Indirect Communication (EventBus)
 Modules communicate via **Event Bus / Mediator**, no direct imports.
+> *In 3.0, Sóng hấp dẫn (Gravitational Waves) is implemented via `IEventBus`.*
+
+```csharp
+// Module A: Publish event (không biết ai nghe)
+registry.EventBus.Publish(new UserLoggedInEvent { UserId = 123 });
+
+// Module B: Subscribe (không cần reference Module A)
+public void OnInitialized() {
+    registry.EventBus.Subscribe<UserLoggedInEvent>(this, @event => {
+        RefreshDashboard(@event.UserId);
+    });
+}
+```
 
 ### #6: Data Sovereignty — Modules Own Their Data
 > *Each galaxy has its own star system — doesn't invade another galaxy's space.*
@@ -80,34 +95,40 @@ Module A **does not directly access** Module B's tables/entities. Need data from
 | WinForms | Controller only injects its own feature's Service; other data via Shared Service |
 | Microservices | Each service has its own DB schema/database |
 
-### #7: Middleware = Gravity
-> *Gravity affects ALL objects in the universe without objects needing to know about it.*
+### #7: Middleware = Gravity & Module Lifecycle (Star Lifecycle)
+> *Gravity affects ALL objects in the universe without objects needing to know about it. Stars also have lifecycles (birth, death).*
 
-Cross-cutting concerns (Auth, Logging, Compression, Error Handling) are handled in the **Middleware layer** — automatically applied to every request/action.
+#### A. Middleware Pipeline (Gravity)
+Cross-cutting concerns (Auth, Logging, Compression, Error Handling) are handled in the **Middleware layer** — automatically applied to every request/action without polluting module business logic.
 
-```
-┌─────────────────────────────────────────┐
-│           Middleware Pipeline            │
-│  ┌─────┐ ┌──────┐ ┌──────┐ ┌─────────┐ │
-│  │ JWT │→│ GZip │→│ Log  │→│ ErrHndl │ │
-│  └─────┘ └──────┘ └──────┘ └─────────┘ │
-│                    ↓                    │
-│            Module Endpoint              │
-└─────────────────────────────────────────┘
+```csharp
+public interface IMiddleware {
+    Task Invoke(ModuleContext context, Func<Task> next);
+}
+
+// Setup Pipeline in Core:
+registry.AddMiddleware(new AuthenticationMiddleware());
+registry.AddMiddleware(new LoggingMiddleware());
+registry.AddMiddleware(new ErrorHandlingMiddleware());
+// Automatically applies to all Dispatch() calls.
 ```
 
 **Key rules:**
-- Module **MUST NOT contain** auth check, logging boilerplate, compression logic
-- Middleware **MUST NOT contain** business logic
-- Adding new middleware = adding 1 handler to pipeline, no module changes
+- Module **MUST NOT contain** auth check, logging boilerplate, compression logic.
+- Middleware **MUST NOT contain** business logic.
+- Adding new middleware = 1 line of registration.
 
-| Platform | Middleware Implementation |
-|----------|-------------------------|
-| Web API (.NET Fx) | `DelegatingHandler` pipeline |
-| ASP.NET Core | `app.Use*()` middleware pipeline |
-| WinForms | `BaseForm` hooks (OnLoad, OnClosing) |
-| Express.js | `app.use()` middleware |
-| Go | `http.Handler` wrapper chain |
+#### B. Module Lifecycle (Star Lifecycle)
+Modules often need to manage resources (DB connections, background threads, socket listeners). The `IModuleLifecycle` allows modules to gracefully start up and shut down.
+
+```csharp
+public interface IModuleLifecycle {
+    Task OnInitializing();      // Before registration
+    Task OnInitialized();       // After registration
+    Task OnShuttingDown();      // Before unload
+    Task OnShutdown();          // After unload
+}
+```
 
 ### #8: Migration Path — From Galaxy to Sub-Universe
 > *When a galaxy grows too large, it can split into an independent sub-universe.*
@@ -254,17 +275,19 @@ app/
 
 ## 6. Full Conversion Table
 
-| Universe | WinForms | Web API | WPF | Go | React |
-|----------|----------|---------|-----|-----|-------|
-| Laws of Physics | IController | BaseApiController | ITool | Command interface | IPlugin |
-| Spacetime | BaseForm/DI | Infrastructure/ | Core/ | shared/ | Redux/Axios |
-| Galaxy | Feature group | Module group | Module group | cmd/ | features/ |
-| Star | Feature folder | Feature slice | Module folder | cmd/x.go | feature/x/ |
-| New Civilization | Add feature | Add vertical slice | Add module | Add command | Add plugin |
-| Big Bang | Init DI | Init Infrastructure | Init Core | Init main.go | Init store |
-| Gravity | BaseForm hooks | DelegatingHandler | App.Use* | http.Handler | app.use() |
-| Own Star System | Feature DB tables | Feature entities | Module models | pkg data | slice state |
-| Sub-Universe | Separate project | Microservice | Separate app | Separate binary | Micro-frontend |
+| Universe | Software Layer | WinForms / C# | Go | TypeScript | Python |
+|----------|---------------|---------------|----|------------|--------|
+| **Laws of Physics** | Core Interfaces | `IModule` | `Module` | `IModule` | `IModule` |
+| **Spacetime** | Shared Infra | `Program.cs` / `SharedLib` | `main.go` / `shared/` | `index.ts` | `main.py` |
+| **Galaxy** | Module Group | Feature folder | `modules/` | `src/modules/` | `modules/` |
+| **Star** | Module Unit | `NotifierModule` | `notifier` pkg | `NotifierModule` class | `NotifierModule` cls |
+| **Registry** | Auto-discover | `ModuleRegistry` | `core.Registry` | `ModuleRegistry` | `ModuleRegistry` |
+| **Gravity** | Middleware | `IMiddleware` | `Middleware` | `IMiddleware` | `IMiddleware` |
+| **Star Lifecycle** | Lifecycle Hooks | `IModuleLifecycle` | `ModuleLifecycle`| `IModuleLifecycle` | `IModuleLifecycle` |
+| **Gravitational Waves**| Event Bus | `IEventBus` | `EventBus` | `EventBus` | `EventBus` |
+| **Space Station** | Service Container| `IServiceContainer` | N/A (Manual DI) | N/A (Manual DI) | N/A (Manual DI) |
+| **Own Star System** | Data Sovereignty | Feature DB tables | pkg DB access | slice state | module schema |
+| **Sub-Universe** | Microservice | Separate project | Separate app | Micro-frontend | Separate app |
 
 ---
 

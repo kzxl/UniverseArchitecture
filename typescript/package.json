@@ -1,6 +1,6 @@
 {
   "name": "universe-demo",
-  "version": "1.0.0",
+  "version": "3.0.0",
   "description": "Universe Architecture Pattern — TypeScript Demo",
   "main": "src/index.ts",
   "scripts": {

@@ -13,6 +13,7 @@ To prove this architecture is production-ready, please consult our official engi
 - **[Benchmark Report / Báo cáo Hiệu năng](docs/architecture/en/benchmark_report.md)** | [VIE](docs/architecture/vi/benchmark_report.md)
 - **[Scaling & Topology / Chuyển đổi Microservices](docs/architecture/en/deployment_topology.md)** | [VIE](docs/architecture/vi/deployment_topology.md)
 - **🔥 [v4.0 Future Proposals / Đề xuất tương lai](docs/architecture/en/future_proposals.md)** | [VIE](docs/architecture/vi/future_proposals.md)
+- **📦 [Package Layering / Dùng cho Mono hay Micro?](docs/architecture/en/package_layering.md)** | [VIE](docs/architecture/vi/package_layering.md)
 
 ---
 

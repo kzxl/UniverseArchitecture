@@ -128,4 +128,43 @@ public sealed class ModuleRegistry
 
     /// <summary>Số lượng middlewares.</summary>
     public int MiddlewareCount => _middlewares.Count;
+
+    // ═══════════════ Hot-Reload Plugin System ═══════════════
+
+    private readonly PluginLoader _pluginLoader = new();
+
+    /// <summary>Nạp tất cả modules từ plugin DLL và đăng ký chúng.</summary>
+    public async Task<IReadOnlyList<IModule>> LoadPlugin(string dllPath)
+    {
+        var modules = _pluginLoader.Load(dllPath);
+        foreach (var module in modules)
+            await RegisterAsync(module);
+        return modules;
+    }
+
+    /// <summary>Gỡ plugin và tất cả modules đã đăng ký từ plugin đó.</summary>
+    public async Task UnloadPlugin(string pluginName)
+    {
+        var moduleNames = _pluginLoader.Unload(pluginName);
+        foreach (var name in moduleNames)
+            await UnregisterAsync(name);
+    }
+
+    /// <summary>Gỡ đăng ký 1 module. Gọi lifecycle hooks nếu có.</summary>
+    public async Task UnregisterAsync(string moduleName)
+    {
+        if (!_modules.TryGetValue(moduleName, out var module))
+            return;
+
+        if (module is IModuleLifecycle lifecycle)
+        {
+            await lifecycle.OnShuttingDown();
+            await lifecycle.OnShutdown();
+        }
+
+        _modules.Remove(moduleName);
+    }
+
+    /// <summary>Danh sách plugins đang loaded.</summary>
+    public IReadOnlyCollection<string> LoadedPlugins => _pluginLoader.LoadedPlugins;
 }

@@ -29,13 +29,18 @@ namespace UniverseDemo.Core.Infrastructure
             Console.WriteLine($"[RabbitMQ-Stub] Broadcasting to exchange '{topic}': {payload}");
         }
 
-        public void Subscribe<T>(object subscriber, Action<T> handler) where T : class
+        public void Subscribe<T>(Action<T> handler) where T : class
         {
             var topic = typeof(T).Name;
             
             // FIXME: Thực tế sẽ tạo queue binding tới exchange '{topic}'
-            // và lăng nghe message, sau đó gọi handler(Deserialize(msg))
-            Console.WriteLine($"[RabbitMQ-Stub] Module '{subscriber.GetType().Name}' tracking queue for '{topic}'");
+            Console.WriteLine($"[RabbitMQ-Stub] Subscribing to queue for '{topic}'");
+        }
+
+        public void Unsubscribe<T>(Action<T> handler) where T : class
+        {
+            var topic = typeof(T).Name;
+            Console.WriteLine($"[RabbitMQ-Stub] Unsubscribing from '{topic}'");
         }
     }
 }

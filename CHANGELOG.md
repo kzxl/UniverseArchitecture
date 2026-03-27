@@ -2,6 +2,20 @@
 
 All notable changes to the Universe Architecture project will be documented in this file.
 
+## [4.0.0] - 2026-03-27
+
+### Added
+- **Hot-Reload Plugin System**: `PluginLoader` (isolated `AssemblyLoadContext`), `PluginWatcher` (auto-detect DLL via `FileSystemWatcher`), `LoadPlugin()`/`UnloadPlugin()` on `ModuleRegistry`.
+- **Temporal Workflows (Saga Pattern)**: `IWorkflowModule`, `WorkflowEngine` with JSON checkpoint persistence, resume after crash, and backward compensation (rollback).
+- **Package Layering Guide**: Documentation clarifying that Monolith projects only need `Universe.Core`; `Workflows`, `Plugins`, `Distributed` layers are fully opt-in.
+- **SamplePlugin**: External `WeatherModule` DLL demonstrating hot-reload capability.
+- **OrderWorkflow**: Demo workflow (CreateOrder → ChargePayment → ShipItem) with Saga compensation.
+
+### Changed
+- `ModuleRegistry` now supports `UnregisterAsync()` for graceful module removal with lifecycle hooks.
+- `RabbitMqEventBusAdapter` updated to match full `IEventBus` interface (`Subscribe`/`Unsubscribe`).
+- `.csproj` restructured to exclude `Plugins/` and `tests/` subdirectories from main compilation.
+
 ## [3.0.0] - 2026-03-26
 
 ### Added

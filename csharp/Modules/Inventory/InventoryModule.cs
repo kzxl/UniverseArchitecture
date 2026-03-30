@@ -87,7 +87,28 @@ public sealed class InventoryModule : IModule, IModuleLifecycle
 
     // ── Lifecycle ──
     public Task OnInitializing() => Task.CompletedTask;
-    public Task OnInitialized() => Task.CompletedTask; // Inventory subscribes via EventBus in SalesModule flow
-    public Task OnShuttingDown() => Task.CompletedTask;
+
+    public Task OnInitialized()
+    {
+        // Subscribe OrderCreatedEvent — auto-deduct stock when order is placed
+        // KHÔNG import SalesModule — chỉ biết event type (Principle #5)
+        _eventBus.Subscribe<Sales.OrderCreatedEvent>(OnOrderCreated);
+        return Task.CompletedTask;
+    }
+
+    public Task OnShuttingDown()
+    {
+        _eventBus.Unsubscribe<Sales.OrderCreatedEvent>(OnOrderCreated);
+        return Task.CompletedTask;
+    }
+
     public Task OnShutdown() => Task.CompletedTask;
+
+    // ── Event Handlers ──
+
+    private void OnOrderCreated(Sales.OrderCreatedEvent e)
+    {
+        // Auto-deduct stock — gọi qua internal method, không qua Registry dispatch
+        DeductStock([e.ProductId, e.Quantity.ToString()]);
+    }
 }

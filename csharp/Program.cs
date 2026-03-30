@@ -3,7 +3,9 @@ using UniverseDemo.Core;
 using UniverseDemo.Core.Middleware;
 using UniverseDemo.Modules.Calculator;
 using UniverseDemo.Modules.Greeter;
+using UniverseDemo.Modules.Inventory;
 using UniverseDemo.Modules.Notifier;
+using UniverseDemo.Modules.Sales;
 using UniverseDemo.Shared;
 
 // ═══════════════════════════════════════════════════════════
@@ -35,8 +37,13 @@ registry.Register(new UniverseDemo.Modules.Organization.DepartmentModule());
 var notifier = new NotifierModule(registry.EventBus);
 await registry.RegisterAsync(notifier);
 
+// Register Enterprise modules with lifecycle
+var inventory = new InventoryModule(registry.EventBus);
+await registry.RegisterAsync(inventory);
+registry.Register(new SalesModule(registry.EventBus));
+
 // ══════════════════ Info ══════════════════
-ConsoleHelper.PrintHeader("Universe Architecture — v3.0 (Phase 4)");
+ConsoleHelper.PrintHeader("Universe Architecture — v4.0 (Enterprise Demo)");
 
 Console.WriteLine($"\n  📦 Registered modules: {registry.Count}");
 Console.WriteLine($"  🔗 Middleware pipeline: {registry.MiddlewareCount} handlers");
@@ -74,6 +81,27 @@ catch (Exception ex)
 Console.WriteLine("\n  ▶ [Sandboxing] Caller thử CẤP QUYỀN 'admin' TRONG TEST (Mô phỏng bypass/context)...");
 // Note: Dispatch/DispatchAsync đều tạo mới context.
 // Giả lập AccessControlMiddleware cho phép truyền user claims qua scope => cần design thêm. Mặc định AccessDenied là đúng!
+
+// ══════════════════ Enterprise Scenario Demo ══════════════════
+ConsoleHelper.PrintHeader("Enterprise Scenario: Sales → Inventory → Notification");
+
+Console.WriteLine("\n  📦 Initial stock:");
+Console.WriteLine(registry.Dispatch("inventory", "list", []));
+
+Console.WriteLine("\n  🛒 Creating orders (Sales publishes OrderCreatedEvent)...");
+Console.WriteLine("  " + registry.Dispatch("sales", "create-order", ["PROD-001", "5"]));
+Console.WriteLine("  " + registry.Dispatch("sales", "create-order", ["PROD-002", "10"]));
+Console.WriteLine("  " + registry.Dispatch("sales", "create-order", ["PROD-001", "3"]));
+
+Console.WriteLine("\n  📦 Stock after orders (auto-deducted via EventBus):");
+Console.WriteLine(registry.Dispatch("inventory", "list", []));
+
+Console.WriteLine("\n  🔔 Notifier received enterprise events:");
+Console.WriteLine(registry.Dispatch("notifier", "history", []));
+Console.WriteLine($"\n  {registry.Dispatch("notifier", "count", [])}");
+
+// Clear notifications for next demo section
+registry.Dispatch("notifier", "clear", []);
 
 // ══════════════════ Demo Commands ══════════════════
 ConsoleHelper.PrintHeader("Demo Base Commands (via Middleware Pipeline)");

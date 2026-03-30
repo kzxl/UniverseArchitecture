@@ -58,6 +58,12 @@ public sealed class NotifierModule : IModule, IModuleLifecycle
         // Subscribe events SAU khi đã đăng ký
         _eventBus.Subscribe<CalculationPerformedEvent>(OnCalculation);
         _eventBus.Subscribe<GreetingEvent>(OnGreeting);
+
+        // Enterprise events — Subscribe OrderCreated và StockChanged
+        // Không import SalesModule hay InventoryModule — chỉ biết event types (Principle #5)
+        _eventBus.Subscribe<Sales.OrderCreatedEvent>(OnOrderCreated);
+        _eventBus.Subscribe<Inventory.StockChangedEvent>(OnStockChanged);
+
         _initialized = true;
         return Task.CompletedTask;
     }
@@ -66,6 +72,8 @@ public sealed class NotifierModule : IModule, IModuleLifecycle
     {
         _eventBus.Unsubscribe<CalculationPerformedEvent>(OnCalculation);
         _eventBus.Unsubscribe<GreetingEvent>(OnGreeting);
+        _eventBus.Unsubscribe<Sales.OrderCreatedEvent>(OnOrderCreated);
+        _eventBus.Unsubscribe<Inventory.StockChangedEvent>(OnStockChanged);
         return Task.CompletedTask;
     }
 
@@ -92,5 +100,17 @@ public sealed class NotifierModule : IModule, IModuleLifecycle
         var count = _notifications.Count;
         _notifications.Clear();
         return $"🗑️ Cleared {count} notification(s)";
+    }
+
+    // Enterprise event handlers
+
+    private void OnOrderCreated(Sales.OrderCreatedEvent e)
+    {
+        _notifications.Add($"📧 Order {e.OrderId}: {e.Quantity}x {e.ProductId}");
+    }
+
+    private void OnStockChanged(Inventory.StockChangedEvent e)
+    {
+        _notifications.Add($"📦 Stock {e.Action}: {e.Quantity}x {e.ProductId}");
     }
 }

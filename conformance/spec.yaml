@@ -1,0 +1,106 @@
+# Universe Architecture — Conformance Test Specification
+# Mỗi language đọc file này → chạy test → verify behavioral parity
+
+tests:
+  # ═══════════════ Registry Core ═══════════════
+
+  - name: "Register and dispatch calculator add"
+    register: ["calculator"]
+    dispatch: { module: "calculator", command: "add", args: ["10", "25"] }
+    expect_contains: "10 + 25 = 35"
+
+  - name: "Register and dispatch calculator sub"
+    register: ["calculator"]
+    dispatch: { module: "calculator", command: "sub", args: ["100", "37"] }
+    expect_contains: "100 - 37 = 63"
+
+  - name: "Register and dispatch calculator mul"
+    register: ["calculator"]
+    dispatch: { module: "calculator", command: "mul", args: ["7", "8"] }
+    expect_contains: "7 * 8 = 56"
+
+  - name: "Register and dispatch calculator div"
+    register: ["calculator"]
+    dispatch: { module: "calculator", command: "div", args: ["22", "7"] }
+    expect_contains: "22 / 7"
+
+  - name: "Division by zero returns error"
+    register: ["calculator"]
+    dispatch: { module: "calculator", command: "div", args: ["10", "0"] }
+    expect_contains: "division by zero"
+
+  - name: "Register and dispatch greeter hello"
+    register: ["greeter"]
+    dispatch: { module: "greeter", command: "hello", args: ["Universe"] }
+    expect_contains: "Universe"
+
+  - name: "Duplicate registration throws"
+    register: ["calculator", "calculator"]
+    expect_error: true
+
+  - name: "Case-insensitive module lookup"
+    register: ["calculator"]
+    dispatch: { module: "CALCULATOR", command: "add", args: ["1", "2"] }
+    expect_contains: "1 + 2 = 3"
+
+  - name: "Unknown module returns error or throws"
+    register: ["calculator"]
+    dispatch: { module: "nonexistent", command: "x", args: [] }
+    expect_error: true
+
+  # ═══════════════ EventBus ═══════════════
+
+  - name: "EventBus publish and subscribe"
+    type: "eventbus"
+    steps:
+      - subscribe: "TestEvent"
+      - publish: { type: "TestEvent", data: { message: "hello" } }
+    expect: "handler_called"
+
+  - name: "EventBus unsubscribe stops delivery"
+    type: "eventbus"
+    steps:
+      - subscribe: "TestEvent"
+      - unsubscribe: "TestEvent"
+      - publish: { type: "TestEvent", data: { message: "hello" } }
+    expect: "handler_not_called"
+
+  # ═══════════════ Middleware Pipeline ═══════════════
+
+  - name: "Middleware pipeline executes in order"
+    register: ["calculator"]
+    middlewares: ["logging", "timing"]
+    dispatch: { module: "calculator", command: "add", args: ["1", "1"] }
+    verify:
+      - "logging.invoked == true"
+      - "timing.elapsed_ms >= 0"
+      - "result contains '1 + 1 = 2'"
+
+  - name: "Error middleware catches exceptions"
+    register: ["calculator"]
+    middlewares: ["error_handling"]
+    dispatch: { module: "calculator", command: "add", args: [] }
+    verify:
+      - "no_exception_thrown"
+
+  # ═══════════════ Enterprise Scenario ═══════════════
+
+  - name: "Sales create-order returns order ID"
+    register: ["sales"]
+    dispatch: { module: "sales", command: "create-order", args: ["PROD-001", "5"] }
+    expect_contains: "ORD-"
+
+  - name: "Inventory check stock"
+    register: ["inventory"]
+    dispatch: { module: "inventory", command: "check", args: ["PROD-001"] }
+    expect_contains: "PROD-001"
+
+  - name: "Inventory deduct insufficient stock"
+    register: ["inventory"]
+    dispatch: { module: "inventory", command: "deduct", args: ["PROD-001", "999"] }
+    expect_contains: "Insufficient"
+
+  - name: "Inventory list shows all products"
+    register: ["inventory"]
+    dispatch: { module: "inventory", command: "list", args: [] }
+    expect_contains: "PROD-001"

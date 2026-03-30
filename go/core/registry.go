@@ -54,6 +54,7 @@ func (r *Registry) AddMiddleware(mw Middleware) {
 }
 
 // Dispatch chuyển command tới module, qua middleware pipeline.
+// Pipeline executes module at end of chain — middleware can read ctx.Result after next().
 func (r *Registry) Dispatch(moduleName, command string, args []string) string {
 	m, ok := r.modules[strings.ToLower(moduleName)]
 	if !ok {
@@ -70,10 +71,7 @@ func (r *Registry) Dispatch(moduleName, command string, args []string) string {
 
 	ctx := NewContext(moduleName, command, args)
 	r.runPipeline(ctx, m)
-	if ctx.Result != "" {
-		return ctx.Result
-	}
-	return m.Execute(command, args)
+	return ctx.Result
 }
 
 func (r *Registry) runPipeline(ctx *ModuleContext, m Module) {
@@ -84,6 +82,7 @@ func (r *Registry) runPipeline(ctx *ModuleContext, m Module) {
 		if index < len(r.middlewares) {
 			r.middlewares[index].Invoke(ctx, next)
 		} else {
+			// End of pipeline → execute module. ctx.Result available for middleware after next().
 			ctx.Result = m.Execute(ctx.Command, ctx.Args)
 		}
 	}

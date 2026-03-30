@@ -37,7 +37,25 @@ class ModuleRegistry:
         self._middlewares.append(mw)
 
     def dispatch(self, module_name: str, command: str, args: list[str]) -> str:
-        """Dispatch command qua middleware pipeline."""
+        """Dispatch command qua middleware pipeline (sync)."""
+        module = self._modules.get(module_name.lower())
+        if module is None:
+            available = ", ".join(self._modules.keys())
+            raise KeyError(f"Module '{module_name}' not found. Available: {available}")
+
+        if not self._middlewares:
+            return module.execute(command, args)
+
+        context = ModuleContext(
+            module_name=module_name,
+            command=command,
+            args=args,
+        )
+        self._run_pipeline(context, module)
+        return context.result if context.result is not None else module.execute(command, args)
+
+    async def dispatch_async(self, module_name: str, command: str, args: list[str]) -> str:
+        """Dispatch command (async). Cho phép module hỗ trợ async execution."""
         module = self._modules.get(module_name.lower())
         if module is None:
             available = ", ".join(self._modules.keys())

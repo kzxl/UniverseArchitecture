@@ -41,9 +41,27 @@ public sealed class ModuleRegistry
     /// <summary>Thêm middleware vào pipeline. Order matters — FIFO.</summary>
     public void AddMiddleware(IMiddleware middleware) => _middlewares.Add(middleware);
 
-    /// <summary>Dispatch command tới module, qua middleware pipeline.</summary>
+    /// <summary>
+    /// Dispatch command tới module, qua middleware pipeline.
+    /// ⚠️ Sync fast-path: nếu không có middleware và module là sync → chạy hoàn toàn đồng bộ.
+    /// Nếu có middleware hoặc module async → fallback sang DispatchAsync (blocking).
+    /// </summary>
     public string Dispatch(string moduleName, string command, string[] args)
     {
+        // Sync fast-path: no middleware + no nested routing → avoid async overhead entirely
+        var parts = moduleName.Split('.', 2);
+        var rootModule = parts[0];
+
+        if (_middlewares.Count == 0 && parts.Length == 1)
+        {
+            if (!_modules.TryGetValue(rootModule, out var module))
+                throw new KeyNotFoundException($"Module '{rootModule}' not found. Available: {string.Join(", ", _modules.Keys)}");
+
+            // Prefer sync execution to avoid sync-over-async deadlock
+            return module.Execute(command, args);
+        }
+
+        // Fallback to async path for middleware/nested routing
         return DispatchAsync(moduleName, command, args).GetAwaiter().GetResult();
     }
 
@@ -73,9 +91,10 @@ public sealed class ModuleRegistry
             Args = args
         };
 
-        // 3. Chạy pipeline (Lực hấp dẫn) -> Execution
+        // 3. Chạy pipeline (Lực hấp dẫn) → module executes at end of chain
+        // Consistent with Go/TS/Python — middleware can read context.Result after next().
         await RunPipeline(context, module);
-        return context.Result ?? await ExecuteModuleCore(module, command, args);
+        return context.Result!;
     }
 
     /// <summary>Shutdown tất cả modules có lifecycle.</summary>
@@ -101,19 +120,26 @@ public sealed class ModuleRegistry
             if (index < _middlewares.Count)
                 return _middlewares[index].InvokeAsync(context, Next);
 
-            // End of pipeline → Không execute CŨ ở đây nữa, đẩy về DispatchAsync chờ Result
-            return Task.CompletedTask;
+            // End of pipeline → execute module. context.Result available for middleware after next().
+            // Consistent behavior across all 4 languages (C#, Go, TS, Python).
+            return ExecuteModuleAndSetResult(context, module);
         }
 
         return Next();
     }
 
-    private async Task<string> ExecuteModuleCore(IModule module, string command, string[] args)
+    private async Task ExecuteModuleAndSetResult(ModuleContext context, IModule module)
     {
-        // Ưu tiên Async Execution nếu module hỗ trợ
+        context.Result = await ExecuteModuleCore(module, context.Command, context.Args);
+    }
+
+    private async Task<string> ExecuteModuleCore(IModule module, string command, string[] args,
+        CancellationToken cancellationToken = default)
+    {
+        // Ưu tiên Async Execution nếu module hỗ trợ — truyền CancellationToken đúng cách
         if (module is IAsyncModule asyncModule)
         {
-            return await asyncModule.ExecuteAsync(command, args);
+            return await asyncModule.ExecuteAsync(command, args, cancellationToken);
         }
         
         // Fallback về sync execution

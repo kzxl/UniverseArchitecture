@@ -6,7 +6,7 @@
 A modular, extensible software architecture pattern inspired by the universe's expansion model.
 Demonstrated across **4 languages** with identical behavior and benchmarks.
 
-### 📚 Enterprise Architecture Documentation (v3.0)
+### 📚 Enterprise Architecture Documentation (v4.0)
 To prove this architecture is production-ready, please consult our official engineering proofs:
 - **[ADR Records (Decisions) / Giải trình Thiết kế](docs/architecture/en/adr_records.md)** | [VIE](docs/architecture/vi/adr_records.md)
 - **[Security & Threat Model / Mô hình Bảo mật](docs/architecture/en/security_model.md)** | [VIE](docs/architecture/vi/security_model.md)
@@ -14,6 +14,7 @@ To prove this architecture is production-ready, please consult our official engi
 - **[Scaling & Topology / Chuyển đổi Microservices](docs/architecture/en/deployment_topology.md)** | [VIE](docs/architecture/vi/deployment_topology.md)
 - **🔥 [v4.0 Future Proposals / Đề xuất tương lai](docs/architecture/en/future_proposals.md)** | [VIE](docs/architecture/vi/future_proposals.md)
 - **📦 [Package Layering / Dùng cho Mono hay Micro?](docs/architecture/en/package_layering.md)** | [VIE](docs/architecture/vi/package_layering.md)
+- **🗓️ [Roadmap](ROADMAP.md)** — Backlog & future plans
 
 ---
 
@@ -75,10 +76,15 @@ Plugin truyền thống dễ bị version mismatch, conflict shared resource. **
 │
 ├── modules/                 ← Các nền văn minh (tự chứa)
 │   ├── calculator/          Module tính toán
-│   └── greeter/             Module chào hỏi
+│   ├── greeter/             Module chào hỏi
+│   ├── inventory/           🆕 Quản lý kho (Data Sovereignty)
+│   ├── sales/               🆕 Đơn hàng (EventBus pub/sub)
+│   └── notifier/            Lắng nghe events từ modules khác
 │
 ├── shared/                  ← Không-thời gian (infrastructure)
 │   └── ConsoleHelper        Output utilities
+│
+├── conformance/             🆕 Cross-language conformance tests
 │
 └── main / Program           ← Entry point + benchmark
 ```
@@ -298,7 +304,29 @@ Each language runs a **5-phase benchmark** (1M iterations, 10K latency samples):
 > **Mọi ngôn ngữ cho cùng output** (trừ benchmark numbers).
 > Chứng minh pattern là language-agnostic.
 
----
+### Test 4: Conformance Suite 🆕
+> **63 automated tests** across 4 languages verify behavioral parity.
+
+```bash
+# C# (18 tests)
+cd csharp/tests && dotnet test --filter ConformanceTests
+
+# Go (14 tests)
+cd go && go test ./conformance/ -v
+
+# Python (15 tests)
+cd python && python -m unittest conformance.test_conformance -v
+
+# TypeScript (16 tests)
+cd typescript && npx tsx src/conformance/conformance.test.ts
+```
+
+| Language | Tests | Status |
+|----------|:-----:|:------:|
+| C# | 18 | ✅ Pass |
+| Go | 14 | ✅ Pass |
+| Python | 15 | ✅ Pass |
+| TypeScript | 16 | ✅ Pass |
 
 ## 🏗️ Real-World Applications
 
